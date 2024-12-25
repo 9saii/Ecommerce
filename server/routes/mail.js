@@ -4,49 +4,67 @@ import nodemailer from 'nodemailer';
 
 // Create a transporter
 export const transportmail = async (req, res) => {
-  // Extract data from the request body
   const { email, message, name, phone } = req.body;
   
-  // Check if required fields are provided
   if (!email || !message || !name || !phone) {
-    return res.status(400).json({ error: 'All fields are required.' });
+    return res.status(400).json({ 
+      error: 'Missing required fields',
+      required: ['email', 'message', 'name', 'phone']
+    });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
+  }
+
+  const phoneRegex = /^\+?[\d\s-]{10,}$/;
+  if (!phoneRegex.test(phone)) {
+    return res.status(400).json({ error: 'Invalid phone number format' });
   }
 
   try {
-    // Create a transporter
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER,  // Email user from environment
-        pass: process.env.EMAIL_PASS,  // Email password from environment
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
       },
     });
 
-    // Set up the email options
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: 'recipient@example.com',  // Replace with recipient email address
-      subject: `New message from ${name} (${email})`,  // Dynamic subject based on form input
+      to: process.env.RECIPIENT_EMAIL || 'recipient@example.com',
+      subject: `New Contact Form Submission from ${name}`,
       text: `
-        You have a new contact form submission:
-        
-        Name: ${name}
-        Email: ${email}
-        Phone: ${phone}
-        
-        Message:
-        ${message}
-      `,
-    };
+            Contact Form Details:
 
-    // Send the email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
-      return res.status(200).json({ message: 'Email sent: ' + info.response });
+            Name: ${name}
+            Email: ${email}
+            Phone: ${phone}
+            Message: ${message}
+            Sent at: ${new Date().toLocaleString()}
+                  `,
+                  html: `
+            <h2>Contact Form Details:</h2>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <h3>Message:</h3>
+            <p>${message}</p>
+            <p><em>Sent at: ${new Date().toLocaleString()}</em></p>
+          `
+      };
+              
+    const info = await transporter.sendMail(mailOptions);
+    res.status(200).json({ 
+      message: 'Email sent successfully',
+      messageId: info.messageId
     });
   } catch (error) {
-    res.status(500).json({ error: 'Something went wrong while sending the email.' });
+    console.error('Mail error:', error);
+    res.status(500).json({ 
+      error: 'Failed to send email',
+    });
   }
 };
